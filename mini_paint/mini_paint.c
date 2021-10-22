@@ -1,162 +1,174 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   mini_paint.c                                       :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: sjacki <sjacki@student.42.fr>              +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2021/10/21 21:10:19 by sjacki            #+#    #+#             */
+/*   Updated: 2021/10/22 21:40:33 by sjacki           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <math.h>
 
-typedef struct	s_zone
+typedef struct s_main
 {
+	FILE	*file;
 	int		width;
 	int		height;
-	char	background;
-}				t_zone;
+	char	back_ch;
+	char	**buf;
 
-typedef struct	s_shape
-{
-	char	type;
+	char	type_c;
 	float	x;
 	float	y;
-	float	radius;
-	char	color;
-}				t_shape;
+	float	r;
+	char	ch_c;
+}				t_main;
 
-int
-	ft_strlen(char const *str)
+int	ft_err(char *str)
 {
-	int	i;
+	int	x;
 
-	i = 0;
-	while (str[i])
-		i++;
-	return (i);
-}
-
-char
-	*get_zone(FILE *file, t_zone *zone)
-{
-	int		i;
-	char	*tmp;
-
-	if (fscanf(file, "%d %d %c\n", &zone->width, &zone->height, &zone->background) != 3)
-		return (NULL);
-	if (zone->width <= 0 || zone->width > 300 || zone->height <= 0 || zone->height > 300)
-		return (NULL);
-	if (!(tmp = (char*)malloc(sizeof(*tmp) * (zone->width * zone->height))))
-		return (NULL);
-	i = 0;
-	while (i < zone->width * zone->height)
-		tmp[i++] = zone->background;
-	return (tmp);
-}
-
-int
-	in_circle(float x, float y, t_shape *shape)
-{
-	float	distance;
-
-	distance = sqrtf(powf(x - shape->x, 2.) + powf(y - shape->y, 2.));
-	if (distance <= shape->radius)
+	x = 0;
+	write (1, "Error: ", 7);
+	while (str[x])
 	{
-		if ((shape->radius - distance) < 1.00000000)
+		write (1, &str[x], 1);
+		x++;
+	}
+	write (1, "\n", 1);
+	return (1);
+}
+
+void	init_struct(t_main *m, FILE *file)
+{
+	m->file = file;
+	m->buf = NULL;
+	m->width = 0;
+	m->height = 0;
+	m->back_ch = 0;
+	m->type_c = 0;
+	m->x = 0;
+	m->y = 0;
+	m->r = 0;
+	m->ch_c = 0;
+}
+
+void	draw_buf(t_main *m)
+{
+	int	x;
+	int	y;
+
+	y = 0;
+	while (y < m->height)
+	{
+		x = 0;
+		while (x < m->width)
+		{
+			write (1, &m->buf[y][x], 1);
+			x++;
+		}
+		write (1, "\n", 1);
+		y++;
+	}
+}
+
+int	get_map(t_main *m)
+{
+	int	x;
+	int	y;
+
+	y = 0;
+	if ((fscanf(m->file, "%d %d %c\n", &m->width, &m->height, &m->back_ch)) != 3)
+		return (1);
+	if (m->width <= 0 || m->width > 300 || m->height <= 0 || m->height > 300)
+		return (1);
+	if (!(m->buf = (char **)malloc(sizeof(char *) * m->height)))
+		return (1);
+	while (y < m->height)
+	{
+		x = 0;
+		if (!(m->buf[y] = (char *)malloc(m->width)))
+			return (1);
+		while (x < m->width)
+		{
+			m->buf[y][x] = m->back_ch;
+			x++;
+		}
+		y++;
+	}
+	return (0);
+}
+
+int	check_hit(float x, float y, t_main *m)
+{
+	float distance;
+
+	distance = sqrtf(powf(x - m->x, 2.) + powf(y - m->y, 2.));
+	if (distance <= m->r)
+	{
+		if ((m->r - distance) < 1.00000000)
 			return (2);
 		return (1);
 	}
 	return (0);
 }
 
-void
-	draw_shape(t_zone *zone, char *drawing, t_shape *shape)
+int	get_c(t_main *m)
 {
-	int	y;
-	int	x;
-	int	is_it;
+	int x;
+	int y;
+	int	hit;
 
 	y = 0;
-	while (y < zone->height)
+	if (m->r <= 0.00000000 || (m->type_c != 'C' && m->type_c != 'c'))
+		return (1);
+	while (y < m->height)
 	{
 		x = 0;
-		while (x < zone->width)
+		while (x < m->width)
 		{
-			is_it = in_circle((float)x, (float)y, shape);
-			if ((shape->type == 'c' && is_it == 2)
-				|| (shape->type == 'C' && is_it))
-				drawing[(y * zone->width) + x] = shape->color;
+			hit = check_hit((float)x, (float)y, m);
+			if (hit == 2 || (m->type_c == 'C' && hit))
+				m->buf[y][x] = m->ch_c;
 			x++;
 		}
 		y++;
 	}
+	return (0);
 }
 
-int
-	draw_shapes(FILE *file, t_zone *zone, char *drawing)
+int	start_alg(t_main *m)
 {
-	t_shape	tmp;
-	int		ret;
-
-	while ((ret = fscanf(file, "%c %f %f %f %c\n", &tmp.type, &tmp.x, &tmp.y, &tmp.radius, &tmp.color)) == 5)
+	int ret;
+	if (get_map(m))
+		return (1);
+	while ((ret = fscanf(m->file, "%c %f %f %f %c\n", &m->type_c, &m->x, &m->y, &m->r, &m->ch_c)) == 5)
 	{
-		if (tmp.radius <= 0.00000000 || (tmp.type != 'c' && tmp.type != 'C'))
-			return (0);
-		draw_shape(zone, drawing, &tmp);
+		if (get_c(m))
+			return (1);
 	}
 	if (ret != -1)
-		return (0);
-	return (1);
+		return (1);
+	draw_buf(m);
+	return (0);
 }
 
-void
-	draw_drawing(t_zone *zone, char *drawing)
-{
-	int	i;
-
-	i = 0;
-	while (i < zone->height)
-	{
-		write(1, drawing + (i * zone->width), zone->width);
-		write(1, "\n", 1);
-		i++;
-	}
-}
-
-int
-	str_error(char const *str)
-{
-	if (str)
-		write(1, str, ft_strlen(str));
-	return (1);
-}
-
-int
-	clear_all(FILE *file, char *drawing, char const *str)
-{
-	if (file)
-		fclose(file);
-	if (drawing)
-		free(drawing);
-	if (str)
-		str_error(str);
-	return (1);
-}
-
-int
-	main(int argc, char **argv)
+int	main(int argc, char **argv)
 {
 	FILE	*file;
-	t_zone	zone;
-	char	*drawing;
+	t_main	m;
 
-	zone.width = 0;
-	zone.height = 0;
-	zone.background = 0;
-	drawing = NULL;
 	if (argc != 2)
-		return (str_error("Error: argument\n"));
+		return (ft_err("argument"));
 	if (!(file = fopen(argv[1], "r")))
-		return (str_error("Error: Operation file corrupted\n"));
-	if (!(drawing = get_zone(file, &zone)))
-		return (clear_all(file, NULL, "Error: Operation file corrupted\n"));
-	if (!(draw_shapes(file, &zone, drawing)))
-		return (clear_all(file, drawing, "Error: Operation file corrupted\n"));
-	draw_drawing(&zone, drawing);
-	clear_all(file, drawing, NULL);
-	return (0);
+		return (ft_err("Operation file corrupted"));
+	init_struct(&m, file);
+	if (start_alg(&m))
+		return (ft_err("Operation file corrupted"));
 }
